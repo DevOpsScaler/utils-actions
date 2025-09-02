@@ -1,0 +1,38 @@
+name: Check commit style
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  commit-style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate commit messages
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+
+          msgs="$(git log --format=%s "$base..$head" || true)"
+          echo "---- Commit subjects under review ----"
+          echo "$msgs"
+          echo "--------------------------------------"
+
+          re='^(infra|deploy|feat|fix|chore|style|refactor|docs|test|ci|perf|build)(\([^)]+\))?:'
+          bad=0
+          while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            # allow merge commits
+            if [[ "$line" =~ ^Merge\ .* ]]; then continue; fi
+            if ! [[ "$line" =~ $re ]]; then
+              echo "::error::Commit does not follow Conventional Commits: $line"
+              bad=1
+            fi
+          done <<< "$msgs"
+
+          exit $bad
